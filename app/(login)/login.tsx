@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState } from 'react';
+import { useActionState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { CircleIcon, Loader2 } from 'lucide-react';
 import { signIn, signUp } from './actions';
 import { ActionState } from '@/lib/auth/middleware';
+import { track } from '@/lib/mixpanel';
 
 export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
   const searchParams = useSearchParams();
@@ -19,6 +20,16 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
     mode === 'signin' ? signIn : signUp,
     { error: '' }
   );
+
+  // Track sign_up_completed client-side when the action succeeds (no error, was pending)
+  const wasSubmitting = useRef(false);
+  useEffect(() => {
+    if (pending) { wasSubmitting.current = true; return; }
+    if (wasSubmitting.current && !state.error && mode === 'signup') {
+      track('sign_up_completed');
+    }
+    wasSubmitting.current = false;
+  }, [pending, state.error, mode]);
 
   return (
     <div className="min-h-[100dvh] flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
