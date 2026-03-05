@@ -1,39 +1,35 @@
-import mixpanel from "mixpanel-browser";
+import mixpanel from 'mixpanel-browser';
 
-const token = process.env.NEXT_PUBLIC_MIXPANEL_TOKEN;
-let initialized = false;
-
-export function initMixpanel() {
-  if (initialized || !token) return;
-  mixpanel.init(token, {
-    debug: process.env.NODE_ENV !== "production",
-    track_pageview: true,
-    persistence: "localStorage",
-  });
-  initialized = true;
+if (typeof window !== 'undefined') {
+  mixpanel.init(process.env.NEXT_PUBLIC_MIXPANEL_TOKEN || '');
 }
 
-export function track(eventName: string, properties?: Record<string, unknown>) {
-  if (!initialized) return;
-  mixpanel.track(eventName, properties);
+interface TrackEventProps {
+  event: string;
+  properties?: Record<string, any>;
 }
 
-export function identify(userId: string) {
-  if (!initialized) return;
+export const trackEvent = ({ event, properties = {} }: TrackEventProps) => {
+  if (typeof window === 'undefined') return;
+  mixpanel.track(event, properties);
+};
+
+export const identifyUser = (userId: string, properties?: Record<string, any>) => {
+  if (typeof window === 'undefined') return;
   mixpanel.identify(userId);
-}
+  if (properties) {
+    mixpanel.people.set(properties);
+  }
+};
 
-export function peopleSet(properties: Record<string, unknown>) {
-  if (!initialized) return;
-  mixpanel.people.set(properties);
-}
-
-export function registerSuperProperties(properties: Record<string, unknown>) {
-  if (!initialized) return;
-  mixpanel.register(properties);
-}
-
-export function reset() {
-  if (!initialized) return;
+export const resetUser = () => {
+  if (typeof window === 'undefined') return;
   mixpanel.reset();
-}
+};
+
+export const setSuperProperties = (properties: Record<string, any>) => {
+  if (typeof window === 'undefined') return;
+  mixpanel.register(properties);
+};
+
+export { mixpanel };
