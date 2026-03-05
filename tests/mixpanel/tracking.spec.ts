@@ -63,13 +63,46 @@ function setupMixpanelInterceptor(page: Page): MixpanelEvent[] {
 // ---------------------------------------------------------------------------
 // Per-event tests
 // ---------------------------------------------------------------------------
-test("fires sign_up_completed on Form submission success", async ({ page }) => {
+test("fires team_member_invited on Invite form submitted successfully", async ({ page }) => {
   const events = setupMixpanelInterceptor(page);
-  await page.goto("/sign-up");
-  await page.click("form[action*='signUp']");
+  await page.goto("/dashboard");
+  await page.click("form[action*='inviteTeamMember']");
   await page.waitForTimeout(500);
-  const found = events.find((e) => e.event === "sign_up_completed");
+  const found = events.find((e) => e.event === "team_member_invited");
   expect(found).toBeTruthy();
-  expect(found?.properties?.has_invitation).toBeDefined();
-  expect(found?.properties?.team_created).toBeDefined();
+  expect(found?.properties?.member_role).toBeDefined();
+  expect(found?.properties?.team_size).toBeDefined();
+});
+
+test("fires subscription_started on Stripe checkout session completed", async ({ page }) => {
+  const events = setupMixpanelInterceptor(page);
+  await page.goto("/pricing");
+  await page.click("form[action*='checkoutAction']");
+  await page.waitForTimeout(500);
+  const found = events.find((e) => e.event === "subscription_started");
+  expect(found).toBeTruthy();
+  expect(found?.properties?.plan_name).toBeDefined();
+  expect(found?.properties?.price_amount).toBeDefined();
+});
+
+test("fires settings_updated on Settings form saved successfully", async ({ page }) => {
+  const events = setupMixpanelInterceptor(page);
+  await page.goto("/dashboard/general");
+  await page.click("form[action*='updateAccount'], form[action*='updatePassword']");
+  await page.waitForTimeout(500);
+  const found = events.find((e) => e.event === "settings_updated");
+  expect(found).toBeTruthy();
+  expect(found?.properties?.setting_type).toBeDefined();
+  expect(found?.properties?.user_role).toBeDefined();
+});
+
+test("fires dashboard_viewed on Dashboard page load", async ({ page }) => {
+  const events = setupMixpanelInterceptor(page);
+  await page.goto("/dashboard");
+  // Page-view event — no interaction needed
+  await page.waitForTimeout(500);
+  const found = events.find((e) => e.event === "dashboard_viewed");
+  expect(found).toBeTruthy();
+  expect(found?.properties?.has_subscription).toBeDefined();
+  expect(found?.properties?.team_members_count).toBeDefined();
 });

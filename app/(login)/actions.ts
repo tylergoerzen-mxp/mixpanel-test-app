@@ -1,70 +1,88 @@
-import { trackEvent, identifyUser, setSuperProperties } from '@/lib/mixpanel';
+import { mixpanel } from '@/lib/mixpanel'
+import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 
-export async function signUpAction(formData: FormData) {
-  try {
-    const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
-    const invitationId = formData.get('invitationId') as string | null;
-    
-    const user = await createUser({ email, password });
-    let teamCreated = false;
-    
-    if (invitationId) {
-      await acceptInvitation(invitationId, user.id);
-    } else {
-      await createTeam(user.id);
-      teamCreated = true;
-    }
-    
-    identifyUser(user.id, {
-      email: user.email,
-      created_at: user.createdAt
-    });
-    
-    const userWithTeam = await getUserWithTeam(user.id);
-    setSuperProperties({
-      user_role: userWithTeam.role,
-      team_plan: userWithTeam.team?.planName || 'Free',
-      subscription_status: userWithTeam.team?.subscriptionStatus || 'inactive'
-    });
-    
-    trackEvent({
-      event: 'sign_up_completed',
-      properties: {
-        has_invitation: !!invitationId,
-        team_created: teamCreated
-      }
-    });
-    
-    return { success: true, user };
-  } catch (error) {
-    return { success: false, error: error.message };
+export async function signUp(formData: FormData) {
+  const email = formData.get('email') as string
+  const password = formData.get('password') as string
+  const inviteToken = formData.get('inviteToken') as string
+  
+  const user = await createUser({ email, password })
+  const hasInvitation = !!inviteToken
+  let teamCreated = false
+  
+  if (hasInvitation) {
+    await acceptInvitation(user.id, inviteToken)
+  } else {
+    await createTeam(user.id)
+    teamCreated = true
   }
+  
+  mixpanel.track('sign_up_completed', {
+    has_invitation: hasInvitation,
+    team_created: teamCreated
+  })
+  
+  await login(user)
+  redirect('/dashboard')
 }
 
-export async function loginAction(formData: FormData) {
-  const email = formData.get('email') as string;
-  const password = formData.get('password') as string;
+export async function login(user: any) {
+  const sessionToken = generateSessionToken()
+  cookies().set('session', sessionToken)
   
-  const user = await authenticateUser(email, password);
-  if (!user) throw new Error('Invalid credentials');
-  
-  identifyUser(user.id, {
-    email: user.email,
-    last_login: new Date().toISOString()
-  });
-  
-  const userWithTeam = await getUserWithTeam(user.id);
-  setSuperProperties({
-    user_role: userWithTeam.role,
-    team_plan: userWithTeam.team?.planName || 'Free',
-    subscription_status: userWithTeam.team?.subscriptionStatus || 'inactive'
-  });
-  
-  return user;
+  const team = await getUserTeam(user.id)
+  mixpanel.identify(user.id)
+  mixpanel.people.set({
+    $email: user.email,
+    user_role: user.role,
+    team_plan: team?.planName || 'Free',
+    subscription_status: team?.subscriptionStatus
+  })
 }
 
-export async function logoutAction() {
-  await signOut();
-  resetUser();
+export async function logout() {
+  cookies().delete('session')
+  mixpanel.reset()
+  redirect('/login')
+}
+
+export async function inviteTeamMember(formData: FormData) {
+  const email = formData.get('email') as string
+  const role = formData.get('role') as string
+  const teamId = formData.get('teamId') as string
+  
+  await sendInvitation({ email, role, teamId })
+  const teamSize = await getTeamMemberCount(teamId)
+  
+  mixpanel.track('team_member_invited', {
+    member_role: role,
+    team_size: teamSize
+  })
+}
+
+export async function updateAccount(formData: FormData) {
+  const userId = formData.get('userId') as string
+  const updates = Object.fromEntries(formData.entries())
+  
+  await updateUserAccount(userId, updates)
+  const user = await getUser(userId)
+  
+  mixpanel.track('settings_updated', {
+    setting_type: 'account',
+    user_role: user.role
+  })
+}
+
+export async function updatePassword(formData: FormData) {
+  const userId = formData.get('userId') as string
+  const password = formData.get('password') as string
+  
+  await updateUserPassword(userId, password)
+  const user = await getUser(userId)
+  
+  mixpanel.track('settings_updated', {
+    setting_type: 'password',
+    user_role: user.role
+  })
 }
